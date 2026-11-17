@@ -319,7 +319,10 @@ elif page == "✅ 교육 체크리스트":
     st.caption("체크는 자가 학습 기록이며 공식 교육 이수 확인이나 독립 수행 승인이 아닙니다.")
     st.progress(ratio, text=f"전체 {len(items)}개 중 {completed}개 완료")
     category = st.selectbox("교육 분류", ["전체"] + sorted({x["category"] for x in items}))
-    for item in items:
+    st.caption("⬆️ 할 일 먼저 · 완료한 항목은 아래로 이동합니다. 체크를 해제하면 다시 위로 올라옵니다.")
+    # Stable sorting keeps the original order within pending/completed groups.
+    ordered_items = sorted(items, key=lambda item: bool(progress.get(item["id"], {}).get("done", False)))
+    for item in ordered_items:
         if category != "전체" and item["category"] != category:
             continue
         ident = item["id"]
