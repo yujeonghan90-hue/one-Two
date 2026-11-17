@@ -377,47 +377,80 @@ else:
     st.subheader("3. 교육 자료 수정")
     st.caption("항목을 편집하고 변경 사항을 적용하면 이 브라우저에 자동 저장됩니다. 다른 사용자에게 공유되지는 않습니다.")
     st.text_input("병동 표시 이름", value=content["ward"], max_chars=120, key="settings_ward", on_change=lambda: st.session_state.content.update(ward=st.session_state.settings_ward.strip() or st.session_state.content["ward"]))
-    group = st.selectbox("수정할 자료", ["materials", "checklist", "faq"], format_func=lambda v: {"materials": "📦 물품 안내", "checklist": "✅ 교육 체크리스트", "faq": "💬 자주 묻는 질문"}[v])
+    flash = st.session_state.pop("editor_notice", None)
+    if flash:
+        st.success(flash)
+    group = st.selectbox("관리할 자료", ["materials", "checklist", "faq"], format_func=lambda v: {"materials": "📦 물품 안내", "checklist": "✅ 교육 체크리스트", "faq": "💬 자주 묻는 질문"}[v], key="editor_group")
     rows = content[group]
     label_key = {"materials": "name", "checklist": "task", "faq": "question"}[group]
-    idx = st.selectbox("항목 선택", [-1] + list(range(len(rows))), format_func=lambda i: "＋ 새 항목 추가" if i == -1 else f"{i+1}. {rows[i][label_key]}", key=f"choose_{group}_{st.session_state.revision}")
+    operation = st.radio("할 작업", ["기존 항목 수정", "항목 삭제", "새 항목 추가"], key=f"editor_operation_{group}")
+    revision = st.session_state.revision
+    idx = None
+    if operation != "새 항목 추가":
+        query = st.text_input("관리할 항목 검색", key=f"editor_search_{group}", placeholder="물품 이름 또는 보관 위치 검색")
+        choices = [i for i, row in enumerate(rows) if not query.strip() or query.strip().casefold() in " ".join(row.values()).casefold()]
+        if choices:
+            idx = st.selectbox("수정·삭제할 항목 선택", choices, format_func=lambda i: f"{i+1}. {rows[i][label_key]}", key=f"editor_select_{group}_{revision}_{query}")
+        else:
+            st.info("해당하는 항목이 없습니다. 검색어를 지우거나 새 항목을 추가하세요.")
     fields = {
         "materials": [("name", "물품 이름"), ("category", "분류"), ("location", "보관 위치"), ("guide", "기본 안내"), ("notice", "주의사항")],
         "checklist": [("id", "고유 ID (기존 ID 변경 시 기록 연결 해제)"), ("category", "교육 분류"), ("task", "교육 항목"), ("detail", "상세 안내")],
         "faq": [("question", "질문"), ("answer", "답변")],
     }
-    current = rows[idx] if idx >= 0 else {}
-    with st.form(f"edit_{group}_{idx}_{st.session_state.revision}"):
-        edited = {}
-        for key, label in fields[group]:
-            if key in ("guide", "notice", "detail", "answer"):
-                edited[key] = st.text_area(label, value=current.get(key, ""), max_chars=10000)
-            else:
-                edited[key] = st.text_input(label, value=current.get(key, ""), max_chars=500)
-        approved = st.checkbox("개인정보가 없고, 실제 사용 전 교육 담당자의 검토가 필요함을 확인했습니다.")
-        delete = st.checkbox("선택한 항목 삭제 확인", disabled=idx == -1)
-        save = st.form_submit_button("변경 사항 적용", type="primary", use_container_width=True)
-    if save:
-        if not approved:
-            st.error("개인정보 및 검토 안내 확인란을 체크하세요.")
-        elif not delete and any(not value.strip() for value in edited.values()):
-            st.error("모든 항목을 입력하세요. 해당 내용이 없으면 '해당 없음'을 입력하세요.")
-        else:
-            try:
+    if idx is not None or operation == "새 항목 추가":
+        current = rows[idx] if idx is not None else {}
+        # Every field has an item- and revision-specific key. Streamlit widget
+        # values must never leak from the previously selected item or operation.
+        scope = f"editor_{group}_{revision}_{idx}_{operation}"
+        if operation == "항목 삭제":
+            st.warning(f"삭제할 항목: {current[label_key]}")
+            if group == "materials":
+                st.write("보관 위치: " + current["location"])
+            st.caption("삭제 후 되돌리기 버튼은 없습니다. 필요한 자료는 먼저 백업하세요.")
+            confirmed = st.checkbox("선택한 항목을 삭제하겠습니다.", key=scope + "_confirm")
+            if st.button("🗑️ 선택 항목 삭제", type="primary", disabled=not confirmed, key=scope + "_delete", use_container_width=True):
                 candidate = json.loads(json.dumps(content))
-                if delete and idx >= 0:
-                    candidate[group].pop(idx)
-                elif idx == -1:
-                    candidate[group].append(edited)
-                else:
-                    candidate[group][idx] = edited
+                candidate[group].pop(idx)
                 cleaned, kept = validate_bundle({"schema_version": SCHEMA_VERSION, "content": candidate, "progress": progress})
                 st.session_state.content = cleaned
                 st.session_state.progress = {x["id"]: kept[x["id"]] for x in cleaned["checklist"] if x["id"] in kept}
                 st.session_state.revision += 1
+                st.session_state.editor_notice = "삭제했습니다. 아래 자동 저장 상태를 확인하세요."
                 st.rerun()
-            except (ValueError, TypeError, KeyError) as exc:
-                st.error(f"저장하지 못했습니다: {exc}")
+        else:
+            if idx is not None:
+                st.info("선택한 항목: " + current[label_key])
+            with st.form(scope + "_form"):
+                edited = {}
+                for key, label in fields[group]:
+                    widget_key = scope + "_" + key
+                    if key in ("guide", "notice", "detail", "answer"):
+                        edited[key] = st.text_area(label, value=current.get(key, ""), max_chars=10000, key=widget_key)
+                    else:
+                        edited[key] = st.text_input(label, value=current.get(key, ""), max_chars=500, key=widget_key)
+                approved = st.checkbox("개인정보가 없으며 실제 사용 전 교육 담당자의 검토가 필요함을 확인했습니다.", key=scope + "_approved")
+                save = st.form_submit_button("수정 내용 저장" if idx is not None else "새 항목 추가", type="primary", use_container_width=True)
+            if save:
+                if not approved:
+                    st.error("개인정보 및 검토 확인란을 체크하세요.")
+                elif any(not value.strip() for value in edited.values()):
+                    st.error("모든 항목을 입력하세요. 해당 내용이 없으면 '해당 없음'을 입력하세요.")
+                else:
+                    try:
+                        candidate = json.loads(json.dumps(content))
+                        if idx is None:
+                            candidate[group].append(edited)
+                        else:
+                            candidate[group][idx] = edited
+                        cleaned, kept = validate_bundle({"schema_version": SCHEMA_VERSION, "content": candidate, "progress": progress})
+                        st.session_state.content = cleaned
+                        st.session_state.progress = {x["id"]: kept[x["id"]] for x in cleaned["checklist"] if x["id"] in kept}
+                        st.session_state.revision += 1
+                        st.session_state.editor_notice = "수정했습니다. 아래 자동 저장 상태를 확인하세요." if idx is not None else "추가했습니다. 기존 항목 수정 또는 항목 삭제에서 다시 관리할 수 있습니다."
+                        st.rerun()
+                    except (ValueError, TypeError, KeyError) as exc:
+                        st.error(f"반영하지 못했습니다: {exc}")
 
 sync_browser_storage()
 st.divider()
