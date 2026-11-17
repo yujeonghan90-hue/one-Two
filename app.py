@@ -3,7 +3,7 @@ from datetime import date
 
 import streamlit as st
 
-st.set_page_config(page_title="병동 온보딩 도우미", page_icon="🩺", layout="wide")
+st.set_page_config(page_title="널스온 | 신규 간호사 교육", page_icon="🩺", layout="centered", initial_sidebar_state="collapsed")
 
 SCHEMA_VERSION = 1
 DEFAULT = {
@@ -78,48 +78,93 @@ if "content" not in st.session_state:
     st.session_state.progress = {}
     st.session_state.revision = 0
 
+def navigate(target):
+    st.session_state.page = target
+
+
+def enter_app():
+    st.session_state.started = True
+    st.session_state.page = "🏠 로비"
+
+
 st.markdown("""<style>
-.stApp {background: #f5f8fb;}
-.block-container {padding-top: 2rem; max-width: 1180px;}
-h1, h2, h3 {color: #123b4a;}
-[data-testid="stMetric"] {background: white; padding: 16px; border-radius: 14px; border: 1px solid #dbe7ec;}
-[data-testid="stSidebar"] {background: #eaf3f4;}
-div.stButton > button {border-radius: 10px;}
+:root {color-scheme: light;}
+.stApp {background: #f4f8f7; color: #193b38;}
+.block-container {max-width: 480px !important; padding: 1.1rem 1rem 3rem !important;}
+[data-testid="stHeader"] {background: transparent;}
+h1 {font-size: 1.9rem !important; letter-spacing: -.07rem; color: #123f39 !important;}
+h2 {font-size: 1.35rem !important; color: #123f39 !important;}
+h3 {font-size: 1.12rem !important; color: #123f39 !important;}
+p, label, input, textarea {font-size: 16px !important; line-height: 1.65;}
+[data-testid="stVerticalBlockBorderWrapper"] {border-radius: 20px !important; background: #fff;}
+.stButton > button, .stDownloadButton > button, [data-testid="stFormSubmitButton"] button {
+    width: 100%; min-height: 54px; border-radius: 16px; font-weight: 650;
+    border: 1px solid #c7ddd7; white-space: normal; text-align: left;
+}
+button[kind="primary"] {background: #087f6d !important; border-color: #087f6d !important; color: #fff !important;}
+[data-baseweb="input"], [data-baseweb="select"] > div {min-height: 50px; border-radius: 12px;}
+[data-testid="stCheckbox"] label {min-height: 48px; align-items: center;}
+[data-testid="stMetric"] {background: white; padding: 14px; border-radius: 16px;}
+.brand {font-size: 12px; letter-spacing: .16em; color: #326a60; font-weight: 800;}
+.splash {min-height: 58svh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 32px 0 20px;}
+.mark {width: 100px; height: 100px; border-radius: 30px; display: flex; align-items: center; justify-content: center; background: #087f6d; color: white; font-size: 56px; font-weight: 850; box-shadow: 0 14px 35px #087f6d24; position: relative; margin-bottom: 24px;}
+.mark:after {content: '+'; position: absolute; right: 9px; top: 0px; font-size: 25px; color: #c8f5df;}
+.splash-title {font-size: 36px; font-weight: 850; letter-spacing: -2px; color: #123f39;}
+.splash-copy {font-size: 14px; line-height: 1.9; color: #46655f; margin-top: 14px;}
+.hero {background: #def0e9; padding: 23px 20px; border-radius: 23px; margin: 12px 0 20px;}
+.hero strong {font-size: 23px; color: #123f39; line-height: 1.5;}
+.hero p {color: #375f56; font-size: 14px !important; margin-bottom: 0;}
+@media (max-width: 360px) {.block-container {padding-left: .75rem !important; padding-right: .75rem !important;} h1 {font-size: 1.65rem !important;}}
+@media (prefers-reduced-motion: no-preference) {.splash {animation: appear .5s ease-out;} @keyframes appear {from {opacity: 0; transform: translateY(8px);} to {opacity: 1; transform: translateY(0);}}}
 </style>""", unsafe_allow_html=True)
 
-with st.sidebar:
-    st.title("🩺 병동 배움터")
-    st.caption("신규 간호사의 첫걸음을 함께합니다")
-    page = st.radio("메뉴", ["🏠 시작하기", "📦 물품 안내", "✅ 교육 체크리스트", "💬 자주 묻는 질문", "⚙️ 자료 관리·백업"])
-    st.divider()
-    st.info("데이터는 현재 접속 세션에서만 유지됩니다. 새로 접속하거나 세션이 종료되면 사라질 수 있으니 JSON 백업을 내려받으세요.")
-    st.caption("로그인·공유 저장소가 없는 교육용 시제품입니다. 병동 공용 배포 전 접근 통제와 보안 검토가 필요합니다.")
+if not st.session_state.get("started", False):
+    st.markdown("""<div class="splash"><div class="mark" aria-label="널스온 앱 마크">N</div>
+    <div class="brand">NURSE ON</div><div class="splash-title">널스온</div>
+    <div class="splash-copy">처음의 낯섦을, 익숙한 자신감으로.<br>물품 위치부터 교육 체크까지<br>신규 간호사의 병동 적응을 함께해요.</div></div>""", unsafe_allow_html=True)
+    st.button("널스온 시작하기 →", type="primary", use_container_width=True, on_click=enter_app)
+    st.caption("교육 보조용 · 환자 및 직원 개인정보를 입력하지 마세요.")
+    st.stop()
+
+if "page" not in st.session_state:
+    st.session_state.page = "🏠 로비"
+page = st.session_state.page
+st.markdown('<div class="brand">✚ NURSE ON</div>', unsafe_allow_html=True)
+if page != "🏠 로비":
+    st.button("← 로비로", on_click=navigate, args=("🏠 로비",))
 
 content = st.session_state.content
 progress = st.session_state.progress
 items = content["checklist"]
 completed = sum(bool(progress.get(x["id"], {}).get("done", False)) for x in items)
 ratio = completed / len(items) if items else 0
-st.title("신규 간호사 교육 도우미")
+st.title("널스온")
 st.caption(content["ward"])
-st.warning("⚠️ 초기 자료는 모두 예시입니다. 실제 병동의 최신 지침으로 검토·교체하세요. 환자 이름·등록번호·진료정보 및 직원 개인정보를 입력하지 마세요. 응급상황은 병동 호출·보고 절차를 우선하세요.")
+with st.expander("안전 안내 · 예시 자료 / 개인정보 입력 금지"):
+    st.warning("초기 자료는 모두 예시입니다. 실제 병동의 최신 지침으로 검토·교체하세요. 환자 이름·등록번호·진료정보 및 직원 개인정보를 입력하지 마세요. 응급상황은 병동 호출·보고 절차를 우선하세요.")
+    st.caption("로그인·공유 저장소가 없는 교육용 시제품입니다. 병동 공용 배포 전 접근 통제와 보안 검토가 필요합니다.")
 
-if page == "🏠 시작하기":
-    st.header("오늘의 배움, 한눈에")
-    a, b, c = st.columns(3)
-    a.metric("등록 물품", f"{len(content['materials'])}개")
-    b.metric("교육 진행", f"{completed} / {len(items)}")
-    c.metric("자주 묻는 질문", f"{len(content['faq'])}개")
-    st.subheader("나의 교육 진행률")
-    st.progress(ratio, text=f"{ratio:.0%} 완료 · 개인 학습 기록")
-    st.markdown("### 이렇게 사용하세요\n1. **물품 안내**에서 이름이나 위치로 검색하세요.\n2. 실제 교육을 받은 뒤 **교육 체크리스트**에 기록하세요.\n3. 반복되는 질문은 **자주 묻는 질문**에서 찾아보세요.\n4. 종료 전 **자료 관리·백업**에서 학습 기록을 내려받으세요.")
+if page == "🏠 로비":
+    st.markdown('<div class="hero"><strong>오늘도 한 걸음,<br>널스온과 함께해요.</strong><p>궁금한 것은 빠르게 찾고<br>배운 것은 하나씩 기록하세요.</p></div>', unsafe_allow_html=True)
+    with st.container(border=True):
+        st.subheader("나의 교육 진행")
+        st.progress(ratio, text=f"{completed} / {len(items)}개 완료 · {ratio:.0%}")
+        st.caption("개인 학습 기록이며 공식 역량 평가를 대신하지 않습니다.")
+    st.subheader("무엇을 도와드릴까요?")
+    st.button("📦  물품 찾기 · 위치와 기본 안내", use_container_width=True, on_click=navigate, args=("📦 물품 안내",))
+    st.button("✅  교육 체크리스트 · 배운 내용 기록", use_container_width=True, on_click=navigate, args=("✅ 교육 체크리스트",))
+    st.button("💬  자주 묻는 질문 · 궁금증 해결", use_container_width=True, on_click=navigate, args=("💬 자주 묻는 질문",))
+    st.button("⚙️  자료 관리 · 내 기록 백업", use_container_width=True, on_click=navigate, args=("⚙️ 자료 관리·백업",))
     remaining = [x for x in items if not progress.get(x["id"], {}).get("done", False)]
-    st.subheader("다음에 확인할 교육")
+    st.subheader("다음에 배울 내용")
     if remaining:
-        for x in remaining[:3]:
-            st.write(f"• {x['task']}")
+        for x in remaining[:2]:
+            with st.container(border=True):
+                st.caption(x["category"])
+                st.write(x["task"])
     else:
-        st.success("등록된 학습 항목을 모두 체크했습니다. 공식 역량 평가는 교육자에게 별도로 확인하세요.")
+        st.success("모든 학습 항목을 체크했어요. 공식 역량 평가는 교육자에게 확인하세요.")
+    st.caption("💾 기록은 현재 세션에서만 유지됩니다. 종료 전 백업을 내려받으세요.")
 
 elif page == "📦 물품 안내":
     st.header("어디에 있고, 무엇을 확인하나요?")
@@ -181,9 +226,8 @@ else:
     st.header("자료 관리·백업")
     st.info("자료 수정은 현재 세션에만 반영되며 다른 사용자에게 공유되지 않습니다. 공용 기본 자료를 바꾸려면 GitHub의 app.py 안 DEFAULT를 수정한 뒤 배포하세요. 이 화면은 관리자 인증 기능이 아닙니다.")
     st.subheader("1. 백업 내려받기")
-    a, b = st.columns(2)
-    a.download_button("내 학습 기록 포함 백업", bundle(), "ward_learning_backup.json", "application/json", use_container_width=True)
-    b.download_button("교육 자료만 내보내기", bundle(False), "ward_content.json", "application/json", use_container_width=True)
+    st.download_button("내 학습 기록 포함 백업", bundle(), "ward_learning_backup.json", "application/json", use_container_width=True)
+    st.download_button("교육 자료만 내보내기", bundle(False), "ward_content.json", "application/json", use_container_width=True)
     st.caption("공유할 때는 교육 자료만 내보내기를 이용하세요. 개인 학습 메모를 공용 저장소에 올리지 마세요.")
     st.subheader("2. 백업 불러오기")
     uploaded = st.file_uploader("이 앱에서 내보낸 JSON 파일", type=["json"])
@@ -199,33 +243,53 @@ else:
         except (ValueError, UnicodeError, TypeError, KeyError) as exc:
             st.error(f"백업을 불러오지 못했습니다: {exc}")
     st.subheader("3. 교육 자료 수정")
-    st.caption("체크리스트 ID는 기록을 연결하는 고유값입니다. 기존 ID를 바꾸면 해당 항목의 학습 기록 연결이 끊깁니다. 아래 저장 버튼을 눌러야 반영됩니다.")
-    with st.form("edit_content"):
+    st.caption("가로로 긴 표 대신, 휴대폰에서 한 항목씩 편하게 수정하세요. 변경 사항은 현재 세션에만 적용됩니다.")
+    with st.form("ward_form"):
         ward = st.text_input("병동 표시 이름", value=content["ward"], max_chars=120)
-        st.markdown("**물품 안내** · 아래 표의 셀을 눌러 수정하고 마지막 행에서 추가하세요.")
-        materials = st.data_editor(content["materials"], num_rows="dynamic", use_container_width=True, key=f"materials_{st.session_state.revision}", column_order=["name", "category", "location", "guide", "notice"])
-        st.caption("name: 물품명 / category: 분류 / location: 위치 / guide: 기본 안내 / notice: 주의사항")
-        st.markdown("**교육 체크리스트**")
-        checklist = st.data_editor(content["checklist"], num_rows="dynamic", use_container_width=True, key=f"tasks_{st.session_state.revision}", column_order=["id", "category", "task", "detail"])
-        st.caption("id: 고유 ID / category: 분류 / task: 교육 항목 / detail: 상세 안내")
-        st.markdown("**자주 묻는 질문**")
-        faq = st.data_editor(content["faq"], num_rows="dynamic", use_container_width=True, key=f"faq_{st.session_state.revision}", column_order=["question", "answer"])
-        st.caption("question: 질문 / answer: 검토된 답변")
-        approved = st.checkbox("환자·직원 개인정보가 없으며, 실제 사용 전 교육 담당자의 검토가 필요함을 확인했습니다.")
-        save = st.form_submit_button("현재 세션에 자료 저장", type="primary")
+        if st.form_submit_button("병동 이름 저장", use_container_width=True):
+            st.session_state.content["ward"] = ward
+            st.rerun()
+    group = st.selectbox("수정할 자료", ["materials", "checklist", "faq"], format_func=lambda v: {"materials": "📦 물품 안내", "checklist": "✅ 교육 체크리스트", "faq": "💬 자주 묻는 질문"}[v])
+    rows = content[group]
+    label_key = {"materials": "name", "checklist": "task", "faq": "question"}[group]
+    idx = st.selectbox("항목 선택", [-1] + list(range(len(rows))), format_func=lambda i: "＋ 새 항목 추가" if i == -1 else f"{i+1}. {rows[i][label_key]}", key=f"choose_{group}_{st.session_state.revision}")
+    fields = {
+        "materials": [("name", "물품 이름"), ("category", "분류"), ("location", "보관 위치"), ("guide", "기본 안내"), ("notice", "주의사항")],
+        "checklist": [("id", "고유 ID (기존 ID 변경 시 기록 연결 해제)"), ("category", "교육 분류"), ("task", "교육 항목"), ("detail", "상세 안내")],
+        "faq": [("question", "질문"), ("answer", "답변")],
+    }
+    current = rows[idx] if idx >= 0 else {}
+    with st.form(f"edit_{group}_{idx}_{st.session_state.revision}"):
+        edited = {}
+        for key, label in fields[group]:
+            if key in ("guide", "notice", "detail", "answer"):
+                edited[key] = st.text_area(label, value=current.get(key, ""), max_chars=10000)
+            else:
+                edited[key] = st.text_input(label, value=current.get(key, ""), max_chars=500)
+        approved = st.checkbox("개인정보가 없고, 실제 사용 전 교육 담당자의 검토가 필요함을 확인했습니다.")
+        delete = st.checkbox("선택한 항목 삭제 확인", disabled=idx == -1)
+        save = st.form_submit_button("변경 사항 적용", type="primary", use_container_width=True)
     if save:
         if not approved:
             st.error("개인정보 및 검토 안내 확인란을 체크하세요.")
+        elif not delete and any(not value.strip() for value in edited.values()):
+            st.error("모든 항목을 입력하세요. 해당 내용이 없으면 '해당 없음'을 입력하세요.")
         else:
             try:
-                candidate = {"ward": ward, "materials": materials, "checklist": checklist, "faq": faq}
+                candidate = json.loads(json.dumps(content))
+                if delete and idx >= 0:
+                    candidate[group].pop(idx)
+                elif idx == -1:
+                    candidate[group].append(edited)
+                else:
+                    candidate[group][idx] = edited
                 cleaned, kept = validate_bundle({"schema_version": SCHEMA_VERSION, "content": candidate, "progress": progress})
                 st.session_state.content = cleaned
-                st.session_state.progress = {x["id"]: kept[x["id"]] for x in checklist if x["id"] in kept}
+                st.session_state.progress = {x["id"]: kept[x["id"]] for x in cleaned["checklist"] if x["id"] in kept}
                 st.session_state.revision += 1
                 st.rerun()
             except (ValueError, TypeError, KeyError) as exc:
-                st.error(f"저장하지 못했습니다: {exc}. 비어 있는 셀은 빈 문자열이라도 입력하세요.")
+                st.error(f"저장하지 못했습니다: {exc}")
 
 st.divider()
-st.caption("병동 배움터 · 교육 보조용 시제품 | 임상 판단·공식 매뉴얼·역량 평가를 대체하지 않습니다.")
+st.caption("널스온 · 신규 간호사의 첫걸음 | 임상 판단·공식 매뉴얼·역량 평가를 대체하지 않습니다.")
