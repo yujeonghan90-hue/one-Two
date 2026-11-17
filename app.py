@@ -1,7 +1,11 @@
+import hashlib
 import json
+import tempfile
+from pathlib import Path
 from datetime import date
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 st.set_page_config(page_title="널스온 | 신규 간호사 교육", page_icon="🩺", layout="centered", initial_sidebar_state="collapsed")
 
@@ -73,6 +77,80 @@ def bundle(include_progress=True):
                        "progress": st.session_state.progress if include_progress else {}}, ensure_ascii=False, indent=2)
 
 
+
+# Small, bundled browser-storage component. Its static page is generated at runtime,
+# so GitHub deployment still needs only app.py and requirements.txt.
+STORAGE_HTML = r"""<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+<body style="margin:0"><script>
+(() => {
+  const post = (type, extra = {}) => window.parent.postMessage(
+    {isStreamlitMessage: true, type, ...extra}, '*');
+  let lastReply = '';
+  const reply = (value) => {
+    const serialized = JSON.stringify(value);
+    if (serialized !== lastReply) {
+      lastReply = serialized;
+      post('streamlit:setComponentValue', {value, dataType: 'json'});
+    }
+  };
+  window.addEventListener('message', (event) => {
+    if (event.source !== window.parent || event.data?.type !== 'streamlit:render') return;
+    const args = event.data.args;
+    try {
+      if (args.mode === 'load') {
+        const raw = localStorage.getItem(args.storage_key);
+        reply({status: 'loaded', data: raw === null ? null : JSON.parse(raw)});
+      } else if (args.mode === 'save') {
+        const serialized = JSON.stringify(args.payload);
+        if (localStorage.getItem(args.storage_key) !== serialized) {
+          localStorage.setItem(args.storage_key, serialized);
+        }
+        if (localStorage.getItem(args.storage_key) !== serialized) throw new Error('verify');
+        reply({status: 'saved', digest: args.digest});
+      }
+    } catch (error) {
+      reply({status: 'error', phase: args.mode, reason: error.name || 'StorageError'});
+    }
+    post('streamlit:setFrameHeight', {height: 0});
+  });
+  post('streamlit:componentReady', {apiVersion: 1});
+  post('streamlit:setFrameHeight', {height: 0});
+})();
+</script></body></html>"""
+
+
+@st.cache_resource
+def browser_storage_component():
+    folder = Path(tempfile.mkdtemp(prefix='nurseon_storage_'))
+    (folder / 'index.html').write_text(STORAGE_HTML, encoding='utf-8')
+    return components.declare_component('nurseon_browser_storage', path=str(folder))
+
+
+def sync_browser_storage():
+    if st.session_state.get('storage_blocked'):
+        st.warning('자동 저장을 사용할 수 없습니다. 아래 학습 기록은 임시 기록입니다. 자료 관리에서 JSON 백업을 내려받으세요.')
+        return
+    payload = json.loads(bundle())
+    digest = hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    result = browser_storage_component()(
+        mode='save', storage_key='nurseon.learning.v1', payload=payload,
+        digest=digest, key='nurseon_storage', default=None,
+    )
+    if result and result.get('status') == 'saved' and result.get('digest') == digest:
+        st.caption('✓ 자동 저장 완료 · 이 기기의 브라우저')
+    elif result and result.get('status') == 'error':
+        st.error('자동 저장에 실패했습니다. 브라우저 저장 공간·개인정보 설정을 확인하거나 JSON 백업을 내려받으세요.')
+    else:
+        st.caption('자동 저장 중… 완료 표시를 확인한 뒤 닫아주세요.')
+
+
+def update_ward():
+    value = st.session_state.get('ward_input', '').strip()
+    if value:
+        st.session_state.content['ward'] = value
+
+
 if "content" not in st.session_state:
     st.session_state.content = json.loads(json.dumps(DEFAULT))
     st.session_state.progress = {}
@@ -83,6 +161,7 @@ def navigate(target):
 
 
 def enter_app():
+    update_ward()
     st.session_state.started = True
     st.session_state.page = "🏠 로비"
 
@@ -106,7 +185,7 @@ button[kind="primary"] {background: #087f6d !important; border-color: #087f6d !i
 [data-testid="stCheckbox"] label {min-height: 48px; align-items: center;}
 [data-testid="stMetric"] {background: white; padding: 14px; border-radius: 16px;}
 .brand {font-size: 12px; letter-spacing: .16em; color: #326a60; font-weight: 800;}
-.splash {min-height: 58svh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 32px 0 20px;}
+.splash {min-height: 32svh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 32px 0 20px;}
 .mark {width: 100px; height: 100px; border-radius: 30px; display: flex; align-items: center; justify-content: center; background: #087f6d; color: white; font-size: 56px; font-weight: 850; box-shadow: 0 14px 35px #087f6d24; position: relative; margin-bottom: 24px;}
 .mark:after {content: '+'; position: absolute; right: 9px; top: 0px; font-size: 25px; color: #c8f5df;}
 .splash-title {font-size: 36px; font-weight: 850; letter-spacing: -2px; color: #123f39;}
@@ -118,12 +197,54 @@ button[kind="primary"] {background: #087f6d !important; border-color: #087f6d !i
 @media (prefers-reduced-motion: no-preference) {.splash {animation: appear .5s ease-out;} @keyframes appear {from {opacity: 0; transform: translateY(8px);} to {opacity: 1; transform: translateY(0);}}}
 </style>""", unsafe_allow_html=True)
 
+# Restore before rendering editable widgets: never overwrite an unread browser backup.
+if not st.session_state.get("storage_loaded", False):
+    st.markdown('<div class="brand">✚ NURSE ON · 널스온</div>', unsafe_allow_html=True)
+    st.caption("이 브라우저의 학습 기록을 불러오는 중…")
+    restored = browser_storage_component()(
+        mode="load", storage_key="nurseon.learning.v1",
+        key="nurseon_storage", default=None,
+    )
+    if restored is None:
+        st.caption("화면이 계속 멈춰 있다면 브라우저의 사이트 데이터 차단 설정을 확인하세요.")
+        if st.button("자동 저장 없이 임시로 사용하기"):
+            st.session_state.storage_blocked = True
+            st.session_state.storage_loaded = True
+            st.rerun()
+        st.stop()
+    if restored.get("status") == "loaded":
+        saved = restored.get("data")
+        if saved is not None:
+            try:
+                restored_content, restored_progress = validate_bundle(saved)
+                st.session_state.content = restored_content
+                st.session_state.progress = restored_progress
+                st.session_state.revision += 1
+            except (ValueError, TypeError, KeyError):
+                st.session_state.storage_blocked = True
+                st.session_state.restore_warning = "저장된 기록 형식을 읽을 수 없어 기존 브라우저 기록을 덮어쓰지 않았습니다. 임시 모드로 실행합니다."
+    else:
+        st.session_state.storage_blocked = True
+        st.session_state.restore_warning = "브라우저 저장소에 접근할 수 없습니다. 임시 모드로 실행합니다."
+    st.session_state.storage_loaded = True
+    st.rerun()
+
+if st.session_state.get("restore_warning"):
+    st.warning(st.session_state.restore_warning)
+
 if not st.session_state.get("started", False):
     st.markdown("""<div class="splash"><div class="mark" aria-label="널스온 앱 마크">N</div>
     <div class="brand">NURSE ON</div><div class="splash-title">널스온</div>
-    <div class="splash-copy">처음의 낯섦을, 익숙한 자신감으로.<br>물품 위치부터 교육 체크까지<br>신규 간호사의 병동 적응을 함께해요.</div></div>""", unsafe_allow_html=True)
-    st.button("널스온 시작하기 →", type="primary", use_container_width=True, on_click=enter_app)
-    st.caption("교육 보조용 · 환자 및 직원 개인정보를 입력하지 마세요.")
+    <div class="splash-copy">처음의 낯섦을, 익숙한 자신감으로.<br>신규 간호사의 병동 적응을 함께해요.</div></div>""", unsafe_allow_html=True)
+    st.subheader("당신의 병동은 어디인가요?")
+    saved_ward = st.session_state.content["ward"]
+    if "ward_input" not in st.session_state:
+        st.session_state.ward_input = "" if saved_ward == DEFAULT["ward"] else saved_ward
+    st.text_input("병동 이름", placeholder="예: 5병동, 내과병동, 외과병동", key="ward_input", max_chars=120, on_change=update_ward)
+    st.caption("병동 이름만 입력하세요. 환자·직원 개인정보는 입력하지 마세요.")
+    st.button("내 병동으로 시작하기 →", type="primary", use_container_width=True, on_click=enter_app, disabled=not st.session_state.get("ward_input", "").strip())
+    st.caption("병동 이름은 화면 표시용입니다. 입력한 이름만으로 실제 병동 자료가 연결되지는 않습니다.")
+    sync_browser_storage()
     st.stop()
 
 if "page" not in st.session_state:
@@ -164,7 +285,7 @@ if page == "🏠 로비":
                 st.write(x["task"])
     else:
         st.success("모든 학습 항목을 체크했어요. 공식 역량 평가는 교육자에게 확인하세요.")
-    st.caption("💾 기록은 현재 세션에서만 유지됩니다. 종료 전 백업을 내려받으세요.")
+    st.caption("💾 체크와 입력이 반영되면 자동 저장됩니다. 같은 기기·같은 브라우저로 다시 방문하세요.")
 
 elif page == "📦 물품 안내":
     st.header("어디에 있고, 무엇을 확인하나요?")
@@ -184,6 +305,7 @@ elif page == "📦 물품 안내":
 
 elif page == "✅ 교육 체크리스트":
     st.header("나의 교육 체크리스트")
+    st.caption("체크는 즉시 반영됩니다. 메모는 입력 후 바깥 영역을 누르면 반영·자동 저장됩니다.")
     st.caption("체크는 자가 학습 기록이며 공식 교육 이수 확인이나 독립 수행 승인이 아닙니다.")
     st.progress(ratio, text=f"전체 {len(items)}개 중 {completed}개 완료")
     category = st.selectbox("교육 분류", ["전체"] + sorted({x["category"] for x in items}))
@@ -224,8 +346,8 @@ elif page == "💬 자주 묻는 질문":
 
 else:
     st.header("자료 관리·백업")
-    st.info("자료 수정은 현재 세션에만 반영되며 다른 사용자에게 공유되지 않습니다. 공용 기본 자료를 바꾸려면 GitHub의 app.py 안 DEFAULT를 수정한 뒤 배포하세요. 이 화면은 관리자 인증 기능이 아닙니다.")
-    st.subheader("1. 백업 내려받기")
+    st.info("학습 기록·병동 이름·적용한 교육 자료는 이 브라우저에 자동 저장됩니다. 다른 기기·브라우저와 동기화되지 않으며, 시크릿 모드 종료나 사이트 데이터 삭제 시 사라질 수 있습니다. 공유 기기에서는 이전 사용자의 기록이 보일 수 있습니다. 이 화면은 관리자 인증 기능이 아닙니다.")
+    st.subheader("1. 추가 백업 (선택 사항)")
     st.download_button("내 학습 기록 포함 백업", bundle(), "ward_learning_backup.json", "application/json", use_container_width=True)
     st.download_button("교육 자료만 내보내기", bundle(False), "ward_content.json", "application/json", use_container_width=True)
     st.caption("공유할 때는 교육 자료만 내보내기를 이용하세요. 개인 학습 메모를 공용 저장소에 올리지 마세요.")
@@ -243,12 +365,8 @@ else:
         except (ValueError, UnicodeError, TypeError, KeyError) as exc:
             st.error(f"백업을 불러오지 못했습니다: {exc}")
     st.subheader("3. 교육 자료 수정")
-    st.caption("가로로 긴 표 대신, 휴대폰에서 한 항목씩 편하게 수정하세요. 변경 사항은 현재 세션에만 적용됩니다.")
-    with st.form("ward_form"):
-        ward = st.text_input("병동 표시 이름", value=content["ward"], max_chars=120)
-        if st.form_submit_button("병동 이름 저장", use_container_width=True):
-            st.session_state.content["ward"] = ward
-            st.rerun()
+    st.caption("항목을 편집하고 변경 사항을 적용하면 이 브라우저에 자동 저장됩니다. 다른 사용자에게 공유되지는 않습니다.")
+    st.text_input("병동 표시 이름", value=content["ward"], max_chars=120, key="settings_ward", on_change=lambda: st.session_state.content.update(ward=st.session_state.settings_ward.strip() or st.session_state.content["ward"]))
     group = st.selectbox("수정할 자료", ["materials", "checklist", "faq"], format_func=lambda v: {"materials": "📦 물품 안내", "checklist": "✅ 교육 체크리스트", "faq": "💬 자주 묻는 질문"}[v])
     rows = content[group]
     label_key = {"materials": "name", "checklist": "task", "faq": "question"}[group]
@@ -291,5 +409,6 @@ else:
             except (ValueError, TypeError, KeyError) as exc:
                 st.error(f"저장하지 못했습니다: {exc}")
 
+sync_browser_storage()
 st.divider()
 st.caption("널스온 · 신규 간호사의 첫걸음 | 임상 판단·공식 매뉴얼·역량 평가를 대체하지 않습니다.")
