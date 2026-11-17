@@ -35,6 +35,10 @@ DEFAULT = {
 }
 
 
+ADDED_MATERIALS = [{'name': '일회용 주사기', 'category': '주사·수액 용품', 'location': '미등록 · 실제 병동 보관 위치를 교육자에게 확인하고 자료 관리에서 입력하세요.', 'guide': '처방·용도에 맞는 용량과 연결 규격, 포장 및 사용기한을 확인하세요.', 'notice': '일회용입니다. 투약·주사 술기는 공식 교육 후 수행하세요.'}, {'name': '주사침', 'category': '주사·수액 용품', 'location': '미등록 · 실제 병동 보관 위치를 교육자에게 확인하고 자료 관리에서 입력하세요.', 'guide': '용도에 맞는 규격과 안전장치 유무를 교육자와 확인하세요.', 'notice': '사용 후 병동 지침에 따라 즉시 손상성 폐기물 용기에 버리세요.'}, {'name': '정맥 카테터', 'category': '주사·수액 용품', 'location': '미등록 · 실제 병동 보관 위치를 교육자에게 확인하고 자료 관리에서 입력하세요.', 'guide': '제품 규격·포장·사용기한을 확인하고 삽입 및 관리 절차를 교육받으세요.', 'notice': '삽입·제거는 공식 교육과 수행 권한 확인 후 진행하세요.'}, {'name': '수액 세트', 'category': '주사·수액 용품', 'location': '미등록 · 실제 병동 보관 위치를 교육자에게 확인하고 자료 관리에서 입력하세요.', 'guide': '수액·장비와의 호환성 및 포장 상태를 확인하세요.', 'notice': '연결·교환 주기 및 조작은 공식 지침을 따르세요.'}, {'name': '연장관', 'category': '주사·수액 용품', 'location': '미등록 · 실제 병동 보관 위치를 교육자에게 확인하고 자료 관리에서 입력하세요.', 'guide': '사용 목적과 연결 규격, 제품 설명서를 확인하세요.', 'notice': '연결 및 관리 절차는 감염관리 지침을 따르세요.'}, {'name': '삼방향 연결관', 'category': '주사·수액 용품', 'location': '미등록 · 실제 병동 보관 위치를 교육자에게 확인하고 자료 관리에서 입력하세요.', 'guide': '유로와 잠금 방향은 제품별 교육 자료로 확인하세요.', 'notice': '임의 조작하지 말고 연결 전 교육자에게 확인하세요.'}, {'name': '멸균 거즈', 'category': '드레싱·소독 용품', 'location': '미등록 · 실제 병동 보관 위치를 교육자에게 확인하고 자료 관리에서 입력하세요.', 'guide': '포장과 사용기한, 필요한 크기를 확인하세요.', 'notice': '개봉 후 멸균 유지 여부를 확인하세요.'}, {'name': '알코올 솜', 'category': '드레싱·소독 용품', 'location': '미등록 · 실제 병동 보관 위치를 교육자에게 확인하고 자료 관리에서 입력하세요.', 'guide': '사용 목적과 적용 부위를 공식 지침에서 확인하세요.', 'notice': '적용 제한 및 건조 기준은 제품·병동 지침을 따르세요.'}, {'name': '투명 드레싱 필름', 'category': '드레싱·소독 용품', 'location': '미등록 · 실제 병동 보관 위치를 교육자에게 확인하고 자료 관리에서 입력하세요.', 'guide': '적용 부위와 제품 규격을 확인하세요.', 'notice': '교체 기준과 피부 상태 확인은 병동 지침을 따르세요.'}, {'name': '의료용 테이프', 'category': '드레싱·소독 용품', 'location': '미등록 · 실제 병동 보관 위치를 교육자에게 확인하고 자료 관리에서 입력하세요.', 'guide': '용도와 피부 상태에 적합한 제품을 확인하세요.', 'notice': '피부 손상 및 알레르기 여부를 확인하세요.'}, {'name': '탄력 붕대', 'category': '드레싱·소독 용품', 'location': '미등록 · 실제 병동 보관 위치를 교육자에게 확인하고 자료 관리에서 입력하세요.', 'guide': '적용 목적과 적절한 규격을 교육자에게 확인하세요.', 'notice': '압박 적용은 교육자의 지도와 병동 기준을 따르세요.'}, {'name': '드레싱 세트', 'category': '드레싱·소독 용품', 'location': '미등록 · 실제 병동 보관 위치를 교육자에게 확인하고 자료 관리에서 입력하세요.', 'guide': '구성품·멸균 포장·사용기한을 확인하세요.', 'notice': '무균 술기는 직접 교육 후 수행하세요.'}, {'name': '멸균 장갑', 'category': '보호구', 'location': '미등록 · 실제 병동 보관 위치를 교육자에게 확인하고 자료 관리에서 입력하세요.', 'guide': '필요한 규격과 포장 상태를 확인하세요.', 'notice': '착용 절차와 멸균 유지 방법을 교육받으세요.'}, {'name': '일회용 가운', 'category': '보호구', 'location': '미등록 · 실제 병동 보관 위치를 교육자에게 확인하고 자료 관리에서 입력하세요.', 'guide': '격리 유형과 작업에 적합한 보호구인지 확인하세요.', 'notice': '착탈의 순서는 병동 감염관리 지침을 따르세요.'}, {'name': '보안경·안면 보호구', 'category': '보호구', 'location': '미등록 · 실제 병동 보관 위치를 교육자에게 확인하고 자료 관리에서 입력하세요.', 'guide': '노출 위험에 맞는 제품을 선택하세요.', 'notice': '재사용 제품의 세척·소독 및 보관 기준을 확인하세요.'}, {'name': '보건용 마스크', 'category': '보호구', 'location': '미등록 · 실제 병동 보관 위치를 교육자에게 확인하고 자료 관리에서 입력하세요.', 'guide': '병동 지침에 맞는 등급·규격을 확인하세요.', 'notice': '밀착 확인과 교체 기준은 공식 교육을 따르세요.'}, {'name': '산소포화도 측정기', 'category': '측정·검사 용품', 'location': '미등록 · 실제 병동 보관 위치를 교육자에게 확인하고 자료 관리에서 입력하세요.', 'guide': '기기 및 센서 상태와 승인된 사용 지침을 확인하세요.', 'notice': '수치 해석과 이상 소견 보고는 병동 기준을 따르세요.'}, {'name': '혈당 측정기', 'category': '측정·검사 용품', 'location': '미등록 · 실제 병동 보관 위치를 교육자에게 확인하고 자료 관리에서 입력하세요.', 'guide': '기기 관리·정도관리 및 교육 이수 기준을 확인하세요.', 'notice': '검사 수행과 결과 보고는 병동의 공식 절차를 따르세요.'}, {'name': '채혈관', 'category': '측정·검사 용품', 'location': '미등록 · 실제 병동 보관 위치를 교육자에게 확인하고 자료 관리에서 입력하세요.', 'guide': '검사 처방에 맞는 종류와 사용기한을 확인하세요.', 'notice': '채혈·라벨링·운반 절차는 공식 지침을 따르세요.'}, {'name': '검체 용기', 'category': '측정·검사 용품', 'location': '미등록 · 실제 병동 보관 위치를 교육자에게 확인하고 자료 관리에서 입력하세요.', 'guide': '검사 종류에 맞는 용기와 보관 조건을 확인하세요.', 'notice': '실제 환자 라벨이나 정보를 앱에 기록하지 마세요.'}, {'name': '손상성 폐기물 전용 용기', 'category': '기타 간호 용품', 'location': '미등록 · 실제 병동 보관 위치를 교육자에게 확인하고 자료 관리에서 입력하세요.', 'guide': '지정된 위치와 교체 담당자, 충전 한계선을 확인하세요.', 'notice': '내용물을 손으로 누르거나 다시 꺼내지 마세요.'}, {'name': '일회용 방수포', 'category': '기타 간호 용품', 'location': '미등록 · 실제 병동 보관 위치를 교육자에게 확인하고 자료 관리에서 입력하세요.', 'guide': '사용 목적에 맞는 규격을 선택하세요.', 'notice': '일회용 제품은 재사용하지 말고 분리배출 기준을 따르세요.'}, {'name': '곡반', 'category': '기타 간호 용품', 'location': '미등록 · 실제 병동 보관 위치를 교육자에게 확인하고 자료 관리에서 입력하세요.', 'guide': '사용 목적과 세척·소독 상태를 확인하세요.', 'notice': '청결·오염 물품 구분과 재처리 기준을 따르세요.'}, {'name': '산소 공급용 비강 캐뉼라', 'category': '기타 간호 용품', 'location': '미등록 · 실제 병동 보관 위치를 교육자에게 확인하고 자료 관리에서 입력하세요.', 'guide': '제품 규격과 장비 연결 기준을 교육받으세요.', 'notice': '산소 투여와 유량 조절은 처방 및 병동 지침을 따르세요.'}]
+DEFAULT["materials"].extend(json.loads(json.dumps(ADDED_MATERIALS)))
+
+
 def validate_bundle(obj):
     if not isinstance(obj, dict) or obj.get("schema_version") != SCHEMA_VERSION:
         raise ValueError("지원하는 백업 형식이 아닙니다.")
@@ -73,7 +77,7 @@ def validate_bundle(obj):
 
 
 def bundle(include_progress=True):
-    return json.dumps({"schema_version": SCHEMA_VERSION, "content": st.session_state.content,
+    return json.dumps({"schema_version": SCHEMA_VERSION, "catalog_version": 2, "content": st.session_state.content,
                        "progress": st.session_state.progress if include_progress else {}}, ensure_ascii=False, indent=2)
 
 
@@ -82,10 +86,11 @@ def bundle(include_progress=True):
 # so GitHub deployment still needs only app.py and requirements.txt.
 STORAGE_HTML = r"""<!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
-<body style="margin:0"><script>
+<body style="margin:0;font-family:system-ui,sans-serif;font-size:13px;color:#326a60"><div id="save-state" role="status" aria-live="polite">기록 확인 중…</div><script>
 (() => {
   const post = (type, extra = {}) => window.parent.postMessage(
     {isStreamlitMessage: true, type, ...extra}, '*');
+  const badge = document.getElementById('save-state');
   let lastReply = '';
   const reply = (value) => {
     const serialized = JSON.stringify(value);
@@ -102,20 +107,24 @@ STORAGE_HTML = r"""<!doctype html>
         const raw = localStorage.getItem(args.storage_key);
         reply({status: 'loaded', data: raw === null ? null : JSON.parse(raw)});
       } else if (args.mode === 'save') {
+        badge.textContent = '자동 저장 중…';
         const serialized = JSON.stringify(args.payload);
         if (localStorage.getItem(args.storage_key) !== serialized) {
           localStorage.setItem(args.storage_key, serialized);
         }
         if (localStorage.getItem(args.storage_key) !== serialized) throw new Error('verify');
+        badge.textContent = '✓ 자동 저장 완료 · 이 기기의 브라우저';
         reply({status: 'saved', digest: args.digest});
       }
     } catch (error) {
+      badge.textContent = '저장소 접근 실패 · 자료 관리에서 백업해 주세요.';
+      badge.style.color = '#b42318';
       reply({status: 'error', phase: args.mode, reason: error.name || 'StorageError'});
     }
-    post('streamlit:setFrameHeight', {height: 0});
+    post('streamlit:setFrameHeight', {height: 42});
   });
   post('streamlit:componentReady', {apiVersion: 1});
-  post('streamlit:setFrameHeight', {height: 0});
+  post('streamlit:setFrameHeight', {height: 42});
 })();
 </script></body></html>"""
 
@@ -137,12 +146,10 @@ def sync_browser_storage():
         mode='save', storage_key='nurseon.learning.v1', payload=payload,
         digest=digest, key='nurseon_storage', default=None,
     )
-    if result and result.get('status') == 'saved' and result.get('digest') == digest:
-        st.caption('✓ 자동 저장 완료 · 이 기기의 브라우저')
-    elif result and result.get('status') == 'error':
-        st.error('자동 저장에 실패했습니다. 브라우저 저장 공간·개인정보 설정을 확인하거나 JSON 백업을 내려받으세요.')
-    else:
-        st.caption('자동 저장 중… 완료 표시를 확인한 뒤 닫아주세요.')
+    # The component itself displays success only after writing AND reading back
+    # the exact payload. A stale Python return value must not mask this status.
+    if result and result.get('status') == 'error':
+        st.error('자동 저장에 실패했습니다. 브라우저 설정을 확인하거나 JSON 백업을 내려받으세요.')
 
 
 def update_ward():
@@ -217,6 +224,9 @@ if not st.session_state.get("storage_loaded", False):
         if saved is not None:
             try:
                 restored_content, restored_progress = validate_bundle(saved)
+                if saved.get("catalog_version", 1) < 2:
+                    names = {row["name"] for row in restored_content["materials"]}
+                    restored_content["materials"].extend(json.loads(json.dumps([row for row in ADDED_MATERIALS if row["name"] not in names])))
                 st.session_state.content = restored_content
                 st.session_state.progress = restored_progress
                 st.session_state.revision += 1
