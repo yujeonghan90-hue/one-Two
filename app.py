@@ -1,10 +1,11 @@
+import urllib.parse
 import urllib.request
 import urllib.error
 import hashlib
 import json
 import tempfile
 from pathlib import Path
-from datetime import date
+from datetime import date, datetime, timezone
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -359,15 +360,80 @@ elif page == "💬 자주 묻는 질문":
             st.write(x["answer"])
         if not found:
             st.info("등록된 답변이 없습니다.")
+    st.caption("Gemini 무료 티어는 사용량 제한이 있으며 입력·응답이 Google의 제품 개선에 사용될 수 있습니다. 공개 가능한 교육 질문에만 사용하세요.")
     st.warning("환자 이름·등록번호·병실·검사 결과 등 개인정보나 비공개 병원 자료를 입력하지 마세요. 응급상황은 채팅 대신 병동 비상 대응 체계와 담당자에게 즉시 연락하세요.")
     consent = st.checkbox("질문·최근 대화·관련 등록 자료가 외부 AI로 전송됨을 이해하며, 개인정보·비공개 자료를 입력하거나 등록하지 않겠습니다.", key="ai_consent")
     try:
-        api_key = str(st.secrets.get("OPENAI_API_KEY", "")).strip()
-        model = str(st.secrets.get("OPENAI_MODEL", "gpt-4.1-mini")).strip()
+        api_key = str(st.secrets.get("GEMINI_API_KEY", "")).strip()
+        model = str(st.secrets.get("GEMINI_MODEL", "gemini-2.5-flash-lite")).strip()
     except (FileNotFoundError, KeyError):
-        api_key, model = "", "gpt-4.1-mini"
+        api_key, model = "", "gemini-2.5-flash-lite"
+    # Restore the password widget from a separate, session-only credential.
+    # Neither credential is included in browser storage or backup bundles.
+    if "ai_key_field" not in st.session_state:
+        st.session_state.ai_key_field = st.session_state.get("ai_session_key", "")
+    with st.expander("🔑 AI 연결 설정", expanded=not bool(api_key or st.session_state.get("ai_session_key"))):
+        st.caption("Google AI Studio의 Gemini API 키가 필요합니다. 무료 티어 프로젝트의 키를 사용하세요. 무료 사용량 제한이 있으며 유료 티어의 과금을 앱이 차단하지는 않습니다. 키는 외부 AI 요청에만 사용하며 브라우저 자동 저장·백업에는 포함하지 않습니다.")
+        st.text_input("API 키 입력 (현재 접속에서만 사용)", type="password", key="ai_key_field", on_change=lambda: st.session_state.update(ai_session_key=st.session_state.ai_key_field.strip()))
+        st.caption("입력 후 키보드의 완료/Enter를 누르거나 입력창 밖을 눌러 반영하세요. GitHub나 채팅에 키를 올리지 마세요.")
+        def clear_ai_key():
+            st.session_state.ai_key_field = ""
+            st.session_state.ai_session_key = ""
+        st.button("입력한 키 지우기", on_click=clear_ai_key)
+    api_key = st.session_state.get("ai_session_key", "").strip() or api_key
+    with st.expander("🔌 API 연결 확인", expanded=True):
+        st.caption("설정 유무가 아니라 Gemini에 실제 테스트 요청을 보내 확인합니다. 테스트도 API 사용 한도에 포함됩니다. 환자정보·병동 자료·대화 내용은 전송하지 않습니다.")
+        connection_id = hashlib.sha256((api_key + "|" + model).encode()).hexdigest()
+        st.write("사용 모델: " + model)
+        st.write("API 키: " + ("설정됨 (비공개)" if api_key else "미설정"))
+        if st.button("API 연결 테스트", key="test_gemini_connection", use_container_width=True, disabled=not api_key):
+            status = "error"
+            detail = ""
+            try:
+                with st.spinner("Gemini 응답 확인 중…"):
+                    test_request = urllib.request.Request(
+                        "https://generativelanguage.googleapis.com/v1beta/models/" + urllib.parse.quote(model, safe="") + ":generateContent",
+                        data=json.dumps({"contents": [{"role": "user", "parts": [{"text": "Reply with OK only."}]}], "generationConfig": {"maxOutputTokens": 32}}).encode("utf-8"),
+                        headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    with urllib.request.urlopen(test_request, timeout=30) as response:
+                        test_result = json.load(response)
+                    test_text = "".join(part.get("text", "") for part in test_result.get("candidates", [{}])[0].get("content", {}).get("parts", []) if not part.get("thought"))
+                    if test_text.strip():
+                        status, detail = "success", "연결 성공! Gemini의 실제 텍스트 응답을 확인했습니다."
+                    else:
+                        detail = "API 요청은 처리됐지만 텍스트 응답이 없습니다. 모델 설정을 확인하고 다시 테스트하세요."
+            except urllib.error.HTTPError as exc:
+                detail = {
+                    400: "요청이 거절되었습니다. Gemini 키가 유효한지, 모델과 지역·계정 조건을 확인하세요.",
+                    401: "인증 실패: API 키를 확인하세요.",
+                    403: "접근 거부: 키 제한, 프로젝트 API 권한, 지원 지역을 확인하세요.",
+                    404: "모델을 찾을 수 없습니다. GEMINI_MODEL 설정을 확인하세요.",
+                    429: "사용량 또는 요청 한도 초과입니다. 연결 성공 여부를 확인하지 못했습니다. 잠시 후 다시 시도하세요.",
+                }.get(exc.code, "API 오류가 발생했습니다. 잠시 후 다시 시도하세요.") + f" (HTTP {exc.code})"
+            except (urllib.error.URLError, TimeoutError):
+                detail = "연결 시간 초과 또는 통신 오류입니다. 잠시 후 다시 테스트하세요."
+            except (ValueError, KeyError, IndexError, TypeError):
+                detail = "응답 형식을 확인하지 못했습니다. 모델 설정을 확인하세요."
+            st.session_state.ai_connection_result = {"id": connection_id, "status": status, "detail": detail, "time": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")}
+        previous_test = st.session_state.get("ai_connection_result")
+        if previous_test and previous_test["id"] == connection_id:
+            if previous_test["status"] == "success":
+                st.success(previous_test["detail"])
+            else:
+                st.error(previous_test["detail"])
+            st.caption("마지막 테스트: " + previous_test["time"] + " · 테스트 당시 결과이며 이후 요청 성공을 보장하지 않습니다.")
+        elif api_key:
+            st.info("아직 테스트하지 않은 설정입니다. ‘API 연결 테스트’를 눌러 주세요.")
+        else:
+            st.info("먼저 AI 연결 설정 또는 Secrets에 Gemini API 키를 등록하세요.")
     if not api_key:
-        st.info("AI 연결 준비가 필요합니다. 앱 운영자가 Streamlit 앱 설정 → Secrets에 OPENAI_API_KEY를 등록하면 채팅을 사용할 수 있습니다.")
+        st.warning("연결 전: 위의 AI 연결 설정에 API 키를 입력하거나 Streamlit Secrets에 GEMINI_API_KEY를 등록해 주세요.")
+    elif not consent:
+        st.info("키가 준비되었습니다. 위의 외부 AI 전송 동의란을 체크하면 질문을 보낼 수 있습니다. 키의 유효성은 첫 요청 때 확인됩니다.")
+    else:
+        st.success("질문을 보낼 수 있습니다. 아래 입력창에 질문을 입력하고 전송하세요. 실제 연결 여부는 답변 요청 시 확인됩니다.")
     st.session_state.setdefault("ai_messages", [])
     if st.button("🗑️ AI 대화 지우기", use_container_width=True):
         st.session_state.ai_messages = []
@@ -376,7 +442,15 @@ elif page == "💬 자주 묻는 질문":
     for message in st.session_state.ai_messages:
         with st.chat_message(message["role"]):
             st.write(message["content"])
-    question = st.chat_input("궁금한 점을 물어보세요", disabled=not api_key or not consent, max_chars=2000)
+    with st.form("ai_question_form", clear_on_submit=True):
+        question_text = st.text_area("널스온 AI에게 질문하기", placeholder="예: 주사기는 어디에 있나요?", max_chars=2000, height=100)
+        submitted = st.form_submit_button("질문 보내기", use_container_width=True)
+    question = question_text.strip() if submitted else ""
+    if submitted and not question:
+        st.warning("질문을 입력해 주세요.")
+    if question and (not api_key or not consent):
+        st.warning("API 키를 연결하고 외부 AI 전송 동의란을 체크한 뒤 다시 질문해 주세요.")
+        question = ""
     if question:
         history = st.session_state.ai_messages[-10:]
         system = (
@@ -411,14 +485,18 @@ elif page == "💬 자주 묻는 질문":
         try:
             with st.spinner("널스온 AI가 답변을 준비하고 있어요…"):
                 req = urllib.request.Request(
-                    "https://api.openai.com/v1/chat/completions",
-                    data=json.dumps({"model": model, "messages": messages, "max_completion_tokens": 1200}).encode("utf-8"),
-                    headers={"Authorization": "Bearer " + api_key, "Content-Type": "application/json"},
+                    "https://generativelanguage.googleapis.com/v1beta/models/" + urllib.parse.quote(model, safe="") + ":generateContent",
+                    data=json.dumps({
+                        "systemInstruction": {"parts": [{"text": system}]},
+                        "contents": [{"role": "model" if m["role"] == "assistant" else "user", "parts": [{"text": m["content"]}]} for m in messages if m["role"] != "system"],
+                        "generationConfig": {"maxOutputTokens": 1200},
+                    }).encode("utf-8"),
+                    headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
                     method="POST",
                 )
                 with urllib.request.urlopen(req, timeout=60) as response:
                     result = json.load(response)
-                answer = result["choices"][0]["message"]["content"]
+                answer = "".join(part.get("text", "") for part in result.get("candidates", [{}])[0].get("content", {}).get("parts", []) if not part.get("thought"))
                 if not isinstance(answer, str) or not answer.strip():
                     raise ValueError("Empty answer")
             st.session_state.ai_messages.append({"role": "assistant", "content": answer})
@@ -427,7 +505,7 @@ elif page == "💬 자주 묻는 질문":
                 st.write(answer)
         except urllib.error.HTTPError as exc:
             st.session_state.ai_messages.pop()
-            st.error({401: "API 키를 확인해 주세요.", 403: "API 사용 권한을 확인해 주세요.", 429: "요청 한도 또는 API 잔액을 확인하고 잠시 후 다시 질문해 주세요."}.get(exc.code, "AI 요청에 실패했습니다. 모델 설정과 서비스 상태를 확인한 뒤 다시 질문해 주세요."))
+            st.error({401: "API 키를 확인해 주세요.", 403: "API 사용 권한을 확인해 주세요.", 429: "무료 사용량 또는 요청 한도에 도달했습니다. 잠시 후 다시 시도하거나 AI Studio에서 한도를 확인하세요."}.get(exc.code, "AI 요청에 실패했습니다. 모델 설정과 서비스 상태를 확인한 뒤 다시 질문해 주세요."))
         except (urllib.error.URLError, TimeoutError, ValueError, KeyError, IndexError):
             st.session_state.ai_messages.pop()
             st.error("답변을 받지 못했습니다. 연결 상태를 확인하고 다시 질문해 주세요.")
