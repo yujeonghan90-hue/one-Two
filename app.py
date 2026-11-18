@@ -391,7 +391,6 @@ elif page == "💬 자주 묻는 질문":
     consent = st.session_state.get("ai_consent_saved", False)
     if not api_key or not consent:
         st.info("대화 준비가 필요합니다. 설정에서 API 연결과 전송 동의를 확인하세요.")
-        st.button("설정 열기", on_click=navigate, args=("⚙️ 설정",))
     st.session_state.setdefault("ai_messages", [])
     st.caption("대화는 이 브라우저에 자동 저장됩니다. 개인정보 입력 금지 · AI 답변은 교육자에게 확인하세요.")
     for message in st.session_state.ai_messages:
