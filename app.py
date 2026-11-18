@@ -79,9 +79,24 @@ def validate_bundle(obj):
     return data, progress
 
 
+def clean_chat(value):
+    if not isinstance(value, list):
+        return []
+    return [{"role": x["role"], "content": x["content"][:12000]} for x in value[-200:] if isinstance(x, dict) and x.get("role") in ("user", "assistant") and isinstance(x.get("content"), str)]
+
+
+def ai_credentials():
+    try:
+        key = str(st.secrets.get("GEMINI_API_KEY", "")).strip()
+        model = str(st.secrets.get("GEMINI_MODEL", "gemini-2.5-flash-lite")).strip()
+    except (FileNotFoundError, KeyError):
+        key, model = "", "gemini-2.5-flash-lite"
+    return st.session_state.get("ai_session_key", "").strip() or key, model
+
+
 def bundle(include_progress=True):
     return json.dumps({"schema_version": SCHEMA_VERSION, "catalog_version": 2, "content": st.session_state.content,
-                       "progress": st.session_state.progress if include_progress else {}}, ensure_ascii=False, indent=2)
+                       "ai_messages": st.session_state.get("ai_messages", []) if include_progress else [], "progress": st.session_state.progress if include_progress else {}}, ensure_ascii=False, indent=2)
 
 
 
@@ -205,6 +220,25 @@ button[kind="primary"] {background: #087f6d !important; border-color: #087f6d !i
 .hero p {color: #375f56; font-size: 14px !important; margin-bottom: 0;}
 @media (max-width: 360px) {.block-container {padding-left: .75rem !important; padding-right: .75rem !important;} h1 {font-size: 1.65rem !important;}}
 @media (prefers-reduced-motion: no-preference) {.splash {animation: appear .5s ease-out;} @keyframes appear {from {opacity: 0; transform: translateY(8px);} to {opacity: 1; transform: translateY(0);}}}
+
+/* NURSEON / pocket fieldbook — cobalt index and crisp notebook surfaces */
+.stApp {background:#eef1f7; color:#202d49;}
+.block-container {max-width:520px !important; padding-top:1.4rem !important;}
+h1,h2,h3,.splash-title {color:#202d49 !important; letter-spacing:-.045em;}
+h1 {font-weight:850 !important; font-size:2.2rem !important;}
+.brand {color:#3157d5; letter-spacing:.22em;}
+.hero {background:#202d49; color:#fff; border-radius:4px 24px 24px 4px; border-left:6px solid #c0d75a; padding:28px 24px;}
+.hero strong,.hero p {color:#fff !important;}
+.mark {background:#3157d5; border-radius:8px 30px 8px 30px; box-shadow:8px 8px 0 #c0d75a;}
+.mark:after {color:#fff;}
+.stButton > button,.stDownloadButton > button,[data-testid="stFormSubmitButton"] button {border-radius:10px; border:1px solid #d2d9e7; background:#fff; color:#202d49; box-shadow:none;}
+.stButton > button:hover {border-color:#3157d5; color:#3157d5;}
+button[kind="primary"] {background:#3157d5 !important; border-color:#3157d5 !important;}
+[data-testid="stExpander"] {background:#fff; border-radius:12px; border:1px solid #d2d9e7; margin-bottom:10px;}
+[data-testid="stChatMessage"] {background:#fff; border-radius:16px; border:1px solid #dce2ee; margin-bottom:12px;}
+[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {background:#e3eaff; border-color:#cad6fc;}
+[data-testid="stForm"] {border:1px solid #cbd6f6; border-radius:14px; background:#f8faff;}
+[data-testid="stProgress"] {accent-color:#3157d5;}
 </style>""", unsafe_allow_html=True)
 
 # Restore before rendering editable widgets: never overwrite an unread browser backup.
@@ -231,6 +265,7 @@ if not st.session_state.get("storage_loaded", False):
                     names = {row["name"] for row in restored_content["materials"]}
                     restored_content["materials"].extend(json.loads(json.dumps([row for row in ADDED_MATERIALS if row["name"] not in names])))
                 st.session_state.content = restored_content
+                st.session_state.ai_messages = clean_chat(saved.get("ai_messages", []))
                 st.session_state.progress = restored_progress
                 st.session_state.revision += 1
             except (ValueError, TypeError, KeyError):
@@ -288,7 +323,7 @@ if page == "🏠 로비":
     st.button("📦  물품 찾기 · 위치와 기본 안내", use_container_width=True, on_click=navigate, args=("📦 물품 안내",))
     st.button("✅  교육 체크리스트 · 배운 내용 기록", use_container_width=True, on_click=navigate, args=("✅ 교육 체크리스트",))
     st.button("💬  자주 묻는 질문 · 궁금증 해결", use_container_width=True, on_click=navigate, args=("💬 자주 묻는 질문",))
-    st.button("⚙️  자료 관리 · 내 기록 백업", use_container_width=True, on_click=navigate, args=("⚙️ 자료 관리·백업",))
+    st.button("⚙️  설정 · 내 기록", use_container_width=True, on_click=navigate, args=("⚙️ 설정",))
     remaining = [x for x in items if not progress.get(x["id"], {}).get("done", False)]
     st.subheader("다음에 배울 내용")
     if remaining:
@@ -350,95 +385,15 @@ elif page == "✅ 교육 체크리스트":
         st.info("등록된 교육 항목이 없습니다.")
 
 elif page == "💬 자주 묻는 질문":
-    st.header("궁금증 해결 · AI에게 물어보기")
+    st.header("궁금증 해결")
     st.caption("널스온 AI는 교육 보조입니다. 답변은 틀릴 수 있으며 공식 병동 지침과 교육자 확인이 우선입니다.")
-    with st.expander("📚 자주 묻는 질문 찾아보기"):
-        q = st.text_input("질문·답변 검색", placeholder="예: 물품, 의료기기, 보고").strip().casefold()
-        found = [x for x in content["faq"] if not q or q in (x["question"] + " " + x["answer"]).casefold()]
-        for x in found:
-            st.markdown("**" + x["question"] + "**")
-            st.write(x["answer"])
-        if not found:
-            st.info("등록된 답변이 없습니다.")
-    st.caption("Gemini 무료 티어는 사용량 제한이 있으며 입력·응답이 Google의 제품 개선에 사용될 수 있습니다. 공개 가능한 교육 질문에만 사용하세요.")
-    st.warning("환자 이름·등록번호·병실·검사 결과 등 개인정보나 비공개 병원 자료를 입력하지 마세요. 응급상황은 채팅 대신 병동 비상 대응 체계와 담당자에게 즉시 연락하세요.")
-    consent = st.checkbox("질문·최근 대화·관련 등록 자료가 외부 AI로 전송됨을 이해하며, 개인정보·비공개 자료를 입력하거나 등록하지 않겠습니다.", key="ai_consent")
-    try:
-        api_key = str(st.secrets.get("GEMINI_API_KEY", "")).strip()
-        model = str(st.secrets.get("GEMINI_MODEL", "gemini-2.5-flash-lite")).strip()
-    except (FileNotFoundError, KeyError):
-        api_key, model = "", "gemini-2.5-flash-lite"
-    # Restore the password widget from a separate, session-only credential.
-    # Neither credential is included in browser storage or backup bundles.
-    if "ai_key_field" not in st.session_state:
-        st.session_state.ai_key_field = st.session_state.get("ai_session_key", "")
-    with st.expander("🔑 AI 연결 설정", expanded=not bool(api_key or st.session_state.get("ai_session_key"))):
-        st.caption("Google AI Studio의 Gemini API 키가 필요합니다. 무료 티어 프로젝트의 키를 사용하세요. 무료 사용량 제한이 있으며 유료 티어의 과금을 앱이 차단하지는 않습니다. 키는 외부 AI 요청에만 사용하며 브라우저 자동 저장·백업에는 포함하지 않습니다.")
-        st.text_input("API 키 입력 (현재 접속에서만 사용)", type="password", key="ai_key_field", on_change=lambda: st.session_state.update(ai_session_key=st.session_state.ai_key_field.strip()))
-        st.caption("입력 후 키보드의 완료/Enter를 누르거나 입력창 밖을 눌러 반영하세요. GitHub나 채팅에 키를 올리지 마세요.")
-        def clear_ai_key():
-            st.session_state.ai_key_field = ""
-            st.session_state.ai_session_key = ""
-        st.button("입력한 키 지우기", on_click=clear_ai_key)
-    api_key = st.session_state.get("ai_session_key", "").strip() or api_key
-    with st.expander("🔌 API 연결 확인", expanded=True):
-        st.caption("설정 유무가 아니라 Gemini에 실제 테스트 요청을 보내 확인합니다. 테스트도 API 사용 한도에 포함됩니다. 환자정보·병동 자료·대화 내용은 전송하지 않습니다.")
-        connection_id = hashlib.sha256((api_key + "|" + model).encode()).hexdigest()
-        st.write("사용 모델: " + model)
-        st.write("API 키: " + ("설정됨 (비공개)" if api_key else "미설정"))
-        if st.button("API 연결 테스트", key="test_gemini_connection", use_container_width=True, disabled=not api_key):
-            status = "error"
-            detail = ""
-            try:
-                with st.spinner("Gemini 응답 확인 중…"):
-                    test_request = urllib.request.Request(
-                        "https://generativelanguage.googleapis.com/v1beta/models/" + urllib.parse.quote(model, safe="") + ":generateContent",
-                        data=json.dumps({"contents": [{"role": "user", "parts": [{"text": "Reply with OK only."}]}], "generationConfig": {"maxOutputTokens": 32}}).encode("utf-8"),
-                        headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
-                        method="POST",
-                    )
-                    with urllib.request.urlopen(test_request, timeout=30) as response:
-                        test_result = json.load(response)
-                    test_text = "".join(part.get("text", "") for part in test_result.get("candidates", [{}])[0].get("content", {}).get("parts", []) if not part.get("thought"))
-                    if test_text.strip():
-                        status, detail = "success", "연결 성공! Gemini의 실제 텍스트 응답을 확인했습니다."
-                    else:
-                        detail = "API 요청은 처리됐지만 텍스트 응답이 없습니다. 모델 설정을 확인하고 다시 테스트하세요."
-            except urllib.error.HTTPError as exc:
-                detail = {
-                    400: "요청이 거절되었습니다. Gemini 키가 유효한지, 모델과 지역·계정 조건을 확인하세요.",
-                    401: "인증 실패: API 키를 확인하세요.",
-                    403: "접근 거부: 키 제한, 프로젝트 API 권한, 지원 지역을 확인하세요.",
-                    404: "모델을 찾을 수 없습니다. GEMINI_MODEL 설정을 확인하세요.",
-                    429: "사용량 또는 요청 한도 초과입니다. 연결 성공 여부를 확인하지 못했습니다. 잠시 후 다시 시도하세요.",
-                }.get(exc.code, "API 오류가 발생했습니다. 잠시 후 다시 시도하세요.") + f" (HTTP {exc.code})"
-            except (urllib.error.URLError, TimeoutError):
-                detail = "연결 시간 초과 또는 통신 오류입니다. 잠시 후 다시 테스트하세요."
-            except (ValueError, KeyError, IndexError, TypeError):
-                detail = "응답 형식을 확인하지 못했습니다. 모델 설정을 확인하세요."
-            st.session_state.ai_connection_result = {"id": connection_id, "status": status, "detail": detail, "time": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")}
-        previous_test = st.session_state.get("ai_connection_result")
-        if previous_test and previous_test["id"] == connection_id:
-            if previous_test["status"] == "success":
-                st.success(previous_test["detail"])
-            else:
-                st.error(previous_test["detail"])
-            st.caption("마지막 테스트: " + previous_test["time"] + " · 테스트 당시 결과이며 이후 요청 성공을 보장하지 않습니다.")
-        elif api_key:
-            st.info("아직 테스트하지 않은 설정입니다. ‘API 연결 테스트’를 눌러 주세요.")
-        else:
-            st.info("먼저 AI 연결 설정 또는 Secrets에 Gemini API 키를 등록하세요.")
-    if not api_key:
-        st.warning("연결 전: 위의 AI 연결 설정에 API 키를 입력하거나 Streamlit Secrets에 GEMINI_API_KEY를 등록해 주세요.")
-    elif not consent:
-        st.info("키가 준비되었습니다. 위의 외부 AI 전송 동의란을 체크하면 질문을 보낼 수 있습니다. 키의 유효성은 첫 요청 때 확인됩니다.")
-    else:
-        st.success("질문을 보낼 수 있습니다. 아래 입력창에 질문을 입력하고 전송하세요. 실제 연결 여부는 답변 요청 시 확인됩니다.")
+    api_key, model = ai_credentials()
+    consent = st.session_state.get("ai_consent_saved", False)
+    if not api_key or not consent:
+        st.info("대화 준비가 필요합니다. 설정에서 API 연결과 전송 동의를 확인하세요.")
+        st.button("설정 열기", on_click=navigate, args=("⚙️ 설정",))
     st.session_state.setdefault("ai_messages", [])
-    if st.button("🗑️ AI 대화 지우기", use_container_width=True):
-        st.session_state.ai_messages = []
-        st.rerun()
-    st.caption("대화는 현재 접속 중에만 유지되며 자동 저장·백업에 포함되지 않습니다. 병동 자료와 학습 기록의 기존 자동 저장은 유지됩니다.")
+    st.caption("대화는 이 브라우저에 자동 저장됩니다. 개인정보 입력 금지 · AI 답변은 교육자에게 확인하세요.")
     for message in st.session_state.ai_messages:
         with st.chat_message(message["role"]):
             st.write(message["content"])
@@ -500,7 +455,7 @@ elif page == "💬 자주 묻는 질문":
                 if not isinstance(answer, str) or not answer.strip():
                     raise ValueError("Empty answer")
             st.session_state.ai_messages.append({"role": "assistant", "content": answer})
-            st.session_state.ai_messages = st.session_state.ai_messages[-20:]
+            st.session_state.ai_messages = st.session_state.ai_messages[-200:]
             with st.chat_message("assistant"):
                 st.write(answer)
         except urllib.error.HTTPError as exc:
@@ -511,102 +466,186 @@ elif page == "💬 자주 묻는 질문":
             st.error("답변을 받지 못했습니다. 연결 상태를 확인하고 다시 질문해 주세요.")
 
 else:
-    st.header("자료 관리·백업")
-    st.info("학습 기록·병동 이름·적용한 교육 자료는 이 브라우저에 자동 저장됩니다. 다른 기기·브라우저와 동기화되지 않으며, 시크릿 모드 종료나 사이트 데이터 삭제 시 사라질 수 있습니다. 공유 기기에서는 이전 사용자의 기록이 보일 수 있습니다. 이 화면은 관리자 인증 기능이 아닙니다.")
-    st.subheader("1. 추가 백업 (선택 사항)")
-    st.download_button("내 학습 기록 포함 백업", bundle(), "ward_learning_backup.json", "application/json", use_container_width=True)
-    st.download_button("교육 자료만 내보내기", bundle(False), "ward_content.json", "application/json", use_container_width=True)
-    st.caption("공유할 때는 교육 자료만 내보내기를 이용하세요. 개인 학습 메모를 공용 저장소에 올리지 마세요.")
-    st.subheader("2. 백업 불러오기")
-    uploaded = st.file_uploader("이 앱에서 내보낸 JSON 파일", type=["json"])
-    if st.button("백업 적용 (현재 자료·학습 기록 교체)", disabled=uploaded is None):
-        try:
-            if uploaded.size > 2_000_000:
-                raise ValueError("백업 파일은 2MB 이하여야 합니다.")
-            data, saved_progress = validate_bundle(json.loads(uploaded.getvalue().decode("utf-8-sig")))
-            st.session_state.content = data
-            st.session_state.progress = saved_progress
-            st.session_state.revision += 1
-            st.rerun()
-        except (ValueError, UnicodeError, TypeError, KeyError) as exc:
-            st.error(f"백업을 불러오지 못했습니다: {exc}")
-    st.subheader("3. 교육 자료 수정")
-    st.caption("항목을 편집하고 변경 사항을 적용하면 이 브라우저에 자동 저장됩니다. 다른 사용자에게 공유되지는 않습니다.")
-    st.text_input("병동 표시 이름", value=content["ward"], max_chars=120, key="settings_ward", on_change=lambda: st.session_state.content.update(ward=st.session_state.settings_ward.strip() or st.session_state.content["ward"]))
-    flash = st.session_state.pop("editor_notice", None)
-    if flash:
-        st.success(flash)
-    group = st.selectbox("관리할 자료", ["materials", "checklist", "faq"], format_func=lambda v: {"materials": "📦 물품 안내", "checklist": "✅ 교육 체크리스트", "faq": "💬 자주 묻는 질문"}[v], key="editor_group")
-    rows = content[group]
-    label_key = {"materials": "name", "checklist": "task", "faq": "question"}[group]
-    operation = st.radio("할 작업", ["기존 항목 수정", "항목 삭제", "새 항목 추가"], key=f"editor_operation_{group}")
-    revision = st.session_state.revision
-    idx = None
-    if operation != "새 항목 추가":
-        query = st.text_input("관리할 항목 검색", key=f"editor_search_{group}", placeholder="물품 이름 또는 보관 위치 검색")
-        choices = [i for i, row in enumerate(rows) if not query.strip() or query.strip().casefold() in " ".join(row.values()).casefold()]
-        if choices:
-            idx = st.selectbox("수정·삭제할 항목 선택", choices, format_func=lambda i: f"{i+1}. {rows[i][label_key]}", key=f"editor_select_{group}_{revision}_{query}")
-        else:
-            st.info("해당하는 항목이 없습니다. 검색어를 지우거나 새 항목을 추가하세요.")
-    fields = {
-        "materials": [("name", "물품 이름"), ("category", "분류"), ("location", "보관 위치"), ("guide", "기본 안내"), ("notice", "주의사항")],
-        "checklist": [("id", "고유 ID (기존 ID 변경 시 기록 연결 해제)"), ("category", "교육 분류"), ("task", "교육 항목"), ("detail", "상세 안내")],
-        "faq": [("question", "질문"), ("answer", "답변")],
-    }
-    if idx is not None or operation == "새 항목 추가":
-        current = rows[idx] if idx is not None else {}
-        # Every field has an item- and revision-specific key. Streamlit widget
-        # values must never leak from the previously selected item or operation.
-        scope = f"editor_{group}_{revision}_{idx}_{operation}"
-        if operation == "항목 삭제":
-            st.warning(f"삭제할 항목: {current[label_key]}")
-            if group == "materials":
-                st.write("보관 위치: " + current["location"])
-            st.caption("삭제 후 되돌리기 버튼은 없습니다. 필요한 자료는 먼저 백업하세요.")
-            confirmed = st.checkbox("선택한 항목을 삭제하겠습니다.", key=scope + "_confirm")
-            if st.button("🗑️ 선택 항목 삭제", type="primary", disabled=not confirmed, key=scope + "_delete", use_container_width=True):
-                candidate = json.loads(json.dumps(content))
-                candidate[group].pop(idx)
-                cleaned, kept = validate_bundle({"schema_version": SCHEMA_VERSION, "content": candidate, "progress": progress})
-                st.session_state.content = cleaned
-                st.session_state.progress = {x["id"]: kept[x["id"]] for x in cleaned["checklist"] if x["id"] in kept}
-                st.session_state.revision += 1
-                st.session_state.editor_notice = "삭제했습니다. 아래 자동 저장 상태를 확인하세요."
-                st.rerun()
-        else:
-            if idx is not None:
-                st.info("선택한 항목: " + current[label_key])
-            with st.form(scope + "_form"):
-                edited = {}
-                for key, label in fields[group]:
-                    widget_key = scope + "_" + key
-                    if key in ("guide", "notice", "detail", "answer"):
-                        edited[key] = st.text_area(label, value=current.get(key, ""), max_chars=10000, key=widget_key)
+    st.header("설정")
+    st.caption("연결과 기록, 병동 자료를 한곳에서 관리하세요.")
+    st.caption("Gemini 무료 티어는 사용량 제한이 있으며 입력·응답이 Google의 제품 개선에 사용될 수 있습니다. 공개 가능한 교육 질문에만 사용하세요.")
+    st.warning("환자 이름·등록번호·병실·검사 결과 등 개인정보나 비공개 병원 자료를 입력하지 마세요. 응급상황은 채팅 대신 병동 비상 대응 체계와 담당자에게 즉시 연락하세요.")
+    consent = st.checkbox("질문·최근 대화·관련 등록 자료가 외부 AI로 전송됨을 이해하며, 개인정보·비공개 자료를 입력하거나 등록하지 않겠습니다.", key="consent_widget", value=st.session_state.get("ai_consent_saved", False), on_change=lambda: st.session_state.update(ai_consent_saved=st.session_state.consent_widget))
+    try:
+        api_key = str(st.secrets.get("GEMINI_API_KEY", "")).strip()
+        model = str(st.secrets.get("GEMINI_MODEL", "gemini-2.5-flash-lite")).strip()
+    except (FileNotFoundError, KeyError):
+        api_key, model = "", "gemini-2.5-flash-lite"
+    # Restore the password widget from a separate, session-only credential.
+    # Neither credential is included in browser storage or backup bundles.
+    if "ai_key_field" not in st.session_state:
+        st.session_state.ai_key_field = st.session_state.get("ai_session_key", "")
+    with st.expander("🔑 AI 연결 설정", expanded=False):
+        st.caption("Google AI Studio의 Gemini API 키가 필요합니다. 무료 티어 프로젝트의 키를 사용하세요. 무료 사용량 제한이 있으며 유료 티어의 과금을 앱이 차단하지는 않습니다. 키는 외부 AI 요청에만 사용하며 브라우저 자동 저장·백업에는 포함하지 않습니다.")
+        st.text_input("API 키 입력 (현재 접속에서만 사용)", type="password", key="ai_key_field", on_change=lambda: st.session_state.update(ai_session_key=st.session_state.ai_key_field.strip()))
+        st.caption("입력 후 키보드의 완료/Enter를 누르거나 입력창 밖을 눌러 반영하세요. GitHub나 채팅에 키를 올리지 마세요.")
+        def clear_ai_key():
+            st.session_state.ai_key_field = ""
+            st.session_state.ai_session_key = ""
+        st.button("입력한 키 지우기", on_click=clear_ai_key)
+    api_key = st.session_state.get("ai_session_key", "").strip() or api_key
+    with st.expander("🔌 API 연결 확인", expanded=False):
+        st.caption("설정 유무가 아니라 Gemini에 실제 테스트 요청을 보내 확인합니다. 테스트도 API 사용 한도에 포함됩니다. 환자정보·병동 자료·대화 내용은 전송하지 않습니다.")
+        connection_id = hashlib.sha256((api_key + "|" + model).encode()).hexdigest()
+        st.write("사용 모델: " + model)
+        st.write("API 키: " + ("설정됨 (비공개)" if api_key else "미설정"))
+        if st.button("API 연결 테스트", key="test_gemini_connection", use_container_width=True, disabled=not api_key):
+            status = "error"
+            detail = ""
+            try:
+                with st.spinner("Gemini 응답 확인 중…"):
+                    test_request = urllib.request.Request(
+                        "https://generativelanguage.googleapis.com/v1beta/models/" + urllib.parse.quote(model, safe="") + ":generateContent",
+                        data=json.dumps({"contents": [{"role": "user", "parts": [{"text": "Reply with OK only."}]}], "generationConfig": {"maxOutputTokens": 32}}).encode("utf-8"),
+                        headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    with urllib.request.urlopen(test_request, timeout=30) as response:
+                        test_result = json.load(response)
+                    test_text = "".join(part.get("text", "") for part in test_result.get("candidates", [{}])[0].get("content", {}).get("parts", []) if not part.get("thought"))
+                    if test_text.strip():
+                        status, detail = "success", "연결 성공! Gemini의 실제 텍스트 응답을 확인했습니다."
                     else:
-                        edited[key] = st.text_input(label, value=current.get(key, ""), max_chars=500, key=widget_key)
-                approved = st.checkbox("개인정보가 없으며 실제 사용 전 교육 담당자의 검토가 필요함을 확인했습니다.", key=scope + "_approved")
-                save = st.form_submit_button("수정 내용 저장" if idx is not None else "새 항목 추가", type="primary", use_container_width=True)
-            if save:
-                if not approved:
-                    st.error("개인정보 및 검토 확인란을 체크하세요.")
-                elif any(not value.strip() for value in edited.values()):
-                    st.error("모든 항목을 입력하세요. 해당 내용이 없으면 '해당 없음'을 입력하세요.")
-                else:
-                    try:
-                        candidate = json.loads(json.dumps(content))
-                        if idx is None:
-                            candidate[group].append(edited)
+                        detail = "API 요청은 처리됐지만 텍스트 응답이 없습니다. 모델 설정을 확인하고 다시 테스트하세요."
+            except urllib.error.HTTPError as exc:
+                detail = {
+                    400: "요청이 거절되었습니다. Gemini 키가 유효한지, 모델과 지역·계정 조건을 확인하세요.",
+                    401: "인증 실패: API 키를 확인하세요.",
+                    403: "접근 거부: 키 제한, 프로젝트 API 권한, 지원 지역을 확인하세요.",
+                    404: "모델을 찾을 수 없습니다. GEMINI_MODEL 설정을 확인하세요.",
+                    429: "사용량 또는 요청 한도 초과입니다. 연결 성공 여부를 확인하지 못했습니다. 잠시 후 다시 시도하세요.",
+                }.get(exc.code, "API 오류가 발생했습니다. 잠시 후 다시 시도하세요.") + f" (HTTP {exc.code})"
+            except (urllib.error.URLError, TimeoutError):
+                detail = "연결 시간 초과 또는 통신 오류입니다. 잠시 후 다시 테스트하세요."
+            except (ValueError, KeyError, IndexError, TypeError):
+                detail = "응답 형식을 확인하지 못했습니다. 모델 설정을 확인하세요."
+            st.session_state.ai_connection_result = {"id": connection_id, "status": status, "detail": detail, "time": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")}
+        previous_test = st.session_state.get("ai_connection_result")
+        if previous_test and previous_test["id"] == connection_id:
+            if previous_test["status"] == "success":
+                st.success(previous_test["detail"])
+            else:
+                st.error(previous_test["detail"])
+            st.caption("마지막 테스트: " + previous_test["time"] + " · 테스트 당시 결과이며 이후 요청 성공을 보장하지 않습니다.")
+        elif api_key:
+            st.info("아직 테스트하지 않은 설정입니다. ‘API 연결 테스트’를 눌러 주세요.")
+        else:
+            st.info("먼저 AI 연결 설정 또는 Secrets에 Gemini API 키를 등록하세요.")
+    with st.expander("📚 자주 묻는 질문 찾아보기"):
+        q = st.text_input("질문·답변 검색", placeholder="예: 물품, 의료기기, 보고").strip().casefold()
+        found = [x for x in content["faq"] if not q or q in (x["question"] + " " + x["answer"]).casefold()]
+        for x in found:
+            st.markdown("**" + x["question"] + "**")
+            st.write(x["answer"])
+        if not found:
+            st.info("등록된 답변이 없습니다.")
+    with st.expander("💬 대화 기록 관리"):
+        st.caption("최대 200개 메시지를 이 기기·브라우저에 저장합니다. 사이트 데이터 삭제 시 사라지며 공유 기기에서 다른 사람이 볼 수 있습니다. 백업에도 대화가 포함되므로 취급에 주의하세요.")
+        confirm = st.checkbox("저장된 AI 대화를 모두 삭제하겠습니다.")
+        if st.button("AI 대화 전체 삭제", disabled=not confirm):
+            st.session_state.ai_messages = []
+            st.success("대화를 삭제했습니다.")
+    with st.expander("백업 내보내기", expanded=False):
+        st.download_button("내 학습 기록 포함 백업", bundle(), "ward_learning_backup.json", "application/json", use_container_width=True)
+        st.download_button("교육 자료만 내보내기", bundle(False), "ward_content.json", "application/json", use_container_width=True)
+        st.caption("공유할 때는 교육 자료만 내보내기를 이용하세요. 개인 학습 메모를 공용 저장소에 올리지 마세요.")
+    with st.expander("백업 불러오기", expanded=False):
+        uploaded = st.file_uploader("이 앱에서 내보낸 JSON 파일", type=["json"])
+        if st.button("백업 적용 (현재 자료·학습 기록 교체)", disabled=uploaded is None):
+            try:
+                if uploaded.size > 2_000_000:
+                    raise ValueError("백업 파일은 2MB 이하여야 합니다.")
+                backup_data = json.loads(uploaded.getvalue().decode("utf-8-sig"))
+                data, saved_progress = validate_bundle(backup_data)
+                st.session_state.ai_messages = clean_chat(backup_data.get("ai_messages", []))
+                st.session_state.content = data
+                st.session_state.progress = saved_progress
+                st.session_state.revision += 1
+                st.rerun()
+            except (ValueError, UnicodeError, TypeError, KeyError) as exc:
+                st.error(f"백업을 불러오지 못했습니다: {exc}")
+    with st.expander("병동 · 교육 자료 편집", expanded=False):
+        st.caption("항목을 편집하고 변경 사항을 적용하면 이 브라우저에 자동 저장됩니다. 다른 사용자에게 공유되지는 않습니다.")
+        st.text_input("병동 표시 이름", value=content["ward"], max_chars=120, key="settings_ward", on_change=lambda: st.session_state.content.update(ward=st.session_state.settings_ward.strip() or st.session_state.content["ward"]))
+        flash = st.session_state.pop("editor_notice", None)
+        if flash:
+            st.success(flash)
+        group = st.selectbox("관리할 자료", ["materials", "checklist", "faq"], format_func=lambda v: {"materials": "📦 물품 안내", "checklist": "✅ 교육 체크리스트", "faq": "💬 자주 묻는 질문"}[v], key="editor_group")
+        rows = content[group]
+        label_key = {"materials": "name", "checklist": "task", "faq": "question"}[group]
+        operation = st.radio("할 작업", ["기존 항목 수정", "항목 삭제", "새 항목 추가"], key=f"editor_operation_{group}")
+        revision = st.session_state.revision
+        idx = None
+        if operation != "새 항목 추가":
+            query = st.text_input("관리할 항목 검색", key=f"editor_search_{group}", placeholder="물품 이름 또는 보관 위치 검색")
+            choices = [i for i, row in enumerate(rows) if not query.strip() or query.strip().casefold() in " ".join(row.values()).casefold()]
+            if choices:
+                idx = st.selectbox("수정·삭제할 항목 선택", choices, format_func=lambda i: f"{i+1}. {rows[i][label_key]}", key=f"editor_select_{group}_{revision}_{query}")
+            else:
+                st.info("해당하는 항목이 없습니다. 검색어를 지우거나 새 항목을 추가하세요.")
+        fields = {
+            "materials": [("name", "물품 이름"), ("category", "분류"), ("location", "보관 위치"), ("guide", "기본 안내"), ("notice", "주의사항")],
+            "checklist": [("id", "고유 ID (기존 ID 변경 시 기록 연결 해제)"), ("category", "교육 분류"), ("task", "교육 항목"), ("detail", "상세 안내")],
+            "faq": [("question", "질문"), ("answer", "답변")],
+        }
+        if idx is not None or operation == "새 항목 추가":
+            current = rows[idx] if idx is not None else {}
+            # Every field has an item- and revision-specific key. Streamlit widget
+            # values must never leak from the previously selected item or operation.
+            scope = f"editor_{group}_{revision}_{idx}_{operation}"
+            if operation == "항목 삭제":
+                st.warning(f"삭제할 항목: {current[label_key]}")
+                if group == "materials":
+                    st.write("보관 위치: " + current["location"])
+                st.caption("삭제 후 되돌리기 버튼은 없습니다. 필요한 자료는 먼저 백업하세요.")
+                confirmed = st.checkbox("선택한 항목을 삭제하겠습니다.", key=scope + "_confirm")
+                if st.button("🗑️ 선택 항목 삭제", type="primary", disabled=not confirmed, key=scope + "_delete", use_container_width=True):
+                    candidate = json.loads(json.dumps(content))
+                    candidate[group].pop(idx)
+                    cleaned, kept = validate_bundle({"schema_version": SCHEMA_VERSION, "content": candidate, "progress": progress})
+                    st.session_state.content = cleaned
+                    st.session_state.progress = {x["id"]: kept[x["id"]] for x in cleaned["checklist"] if x["id"] in kept}
+                    st.session_state.revision += 1
+                    st.session_state.editor_notice = "삭제했습니다. 아래 자동 저장 상태를 확인하세요."
+                    st.rerun()
+            else:
+                if idx is not None:
+                    st.info("선택한 항목: " + current[label_key])
+                with st.form(scope + "_form"):
+                    edited = {}
+                    for key, label in fields[group]:
+                        widget_key = scope + "_" + key
+                        if key in ("guide", "notice", "detail", "answer"):
+                            edited[key] = st.text_area(label, value=current.get(key, ""), max_chars=10000, key=widget_key)
                         else:
-                            candidate[group][idx] = edited
-                        cleaned, kept = validate_bundle({"schema_version": SCHEMA_VERSION, "content": candidate, "progress": progress})
-                        st.session_state.content = cleaned
-                        st.session_state.progress = {x["id"]: kept[x["id"]] for x in cleaned["checklist"] if x["id"] in kept}
-                        st.session_state.revision += 1
-                        st.session_state.editor_notice = "수정했습니다. 아래 자동 저장 상태를 확인하세요." if idx is not None else "추가했습니다. 기존 항목 수정 또는 항목 삭제에서 다시 관리할 수 있습니다."
-                        st.rerun()
-                    except (ValueError, TypeError, KeyError) as exc:
-                        st.error(f"반영하지 못했습니다: {exc}")
+                            edited[key] = st.text_input(label, value=current.get(key, ""), max_chars=500, key=widget_key)
+                    approved = st.checkbox("개인정보가 없으며 실제 사용 전 교육 담당자의 검토가 필요함을 확인했습니다.", key=scope + "_approved")
+                    save = st.form_submit_button("수정 내용 저장" if idx is not None else "새 항목 추가", type="primary", use_container_width=True)
+                if save:
+                    if not approved:
+                        st.error("개인정보 및 검토 확인란을 체크하세요.")
+                    elif any(not value.strip() for value in edited.values()):
+                        st.error("모든 항목을 입력하세요. 해당 내용이 없으면 '해당 없음'을 입력하세요.")
+                    else:
+                        try:
+                            candidate = json.loads(json.dumps(content))
+                            if idx is None:
+                                candidate[group].append(edited)
+                            else:
+                                candidate[group][idx] = edited
+                            cleaned, kept = validate_bundle({"schema_version": SCHEMA_VERSION, "content": candidate, "progress": progress})
+                            st.session_state.content = cleaned
+                            st.session_state.progress = {x["id"]: kept[x["id"]] for x in cleaned["checklist"] if x["id"] in kept}
+                            st.session_state.revision += 1
+                            st.session_state.editor_notice = "수정했습니다. 아래 자동 저장 상태를 확인하세요." if idx is not None else "추가했습니다. 기존 항목 수정 또는 항목 삭제에서 다시 관리할 수 있습니다."
+                            st.rerun()
+                        except (ValueError, TypeError, KeyError) as exc:
+                            st.error(f"반영하지 못했습니다: {exc}")
 
 sync_browser_storage()
 st.divider()
